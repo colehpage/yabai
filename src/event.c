@@ -688,7 +688,7 @@ static EVENT_CALLBACK(EVENT_HANDLER_WINDOW_DEMINIMIZED)
         debug("%s: window %s %d is deminimized on active space\n", __FUNCTION__, window->application->name, window->id);
         if (window->border.id && border_should_order_in(window)) {
             border_ensure_same_space(window);
-            SLSOrderWindow(g_connection, window->border.id, 1, window->id);
+            SLSOrderWindow(g_connection, window->border.id, -1, window->id);
         }
         if (window_manager_should_manage_window(window) && !window_manager_find_managed_window(&g_window_manager, window)) {
             struct window *last_window = window_manager_find_window(&g_window_manager, g_window_manager.last_window_id);
@@ -743,7 +743,8 @@ static EVENT_CALLBACK(EVENT_HANDLER_SLS_WINDOW_MOVED)
     if (border->id && border_should_order_in(window)) {
         CGRect frame = {};
         SLSGetWindowBounds(g_connection, window_id, &frame);
-        SLSMoveWindow(g_connection, border->id, &frame.origin);
+        CGPoint border_origin = { frame.origin.x - 4, frame.origin.y - 4 };
+        SLSMoveWindow(g_connection, border->id, &border_origin);
     }
 
     return EVENT_SUCCESS;
@@ -770,21 +771,26 @@ static EVENT_CALLBACK(EVENT_HANDLER_SLS_WINDOW_RESIZED)
         CGRect frame = {};
         SLSGetWindowBounds(g_connection, window_id, &frame);
 
-        CGSNewRegionWithRect(&frame, &border->region);
-        border->frame.size = frame.size;
+        CGRect border_frame = CGRectInset(frame, -4, -4);
+        CGSNewRegionWithRect(&border_frame, &border->region);
+        window->border.frame.size = (CGSize){border_frame.size.width + 2, border_frame.size.height + 2};
+        CGRect window_border = window->frame;
+        window_border.origin = (CGPoint){4,4};
 
-        border->path = CGPathCreateMutable();
-        CGPathAddRoundedRect(border->path, NULL, border->frame, 0, 0);
+        if (window_border.size.height > 18 && window_border.size.width > 18) {
+          border->path = CGPathCreateMutable();
+          CGPathAddRoundedRect(border->path, NULL, window_border, 9, 9);
 
-        SLSDisableUpdate(g_connection);
-        SLSOrderWindow(g_connection, border->id, 0, 0);
-        SLSSetWindowShape(g_connection, border->id, 0.0f, 0.0f, border->region);
-        CGContextClearRect(border->context, border->frame);
-        CGContextAddPath(border->context, border->path);
-        CGContextStrokePath(border->context);
-        CGContextFlush(border->context);
-        SLSOrderWindow(g_connection, border->id, 1, window->id);
-        SLSReenableUpdate(g_connection);
+          SLSDisableUpdate(g_connection);
+          SLSOrderWindow(g_connection, border->id, 0, 0);
+          SLSSetWindowShape(g_connection, border->id, 0.0f, 0.0f, border->region);
+          CGContextClearRect(border->context, border->frame);
+          CGContextAddPath(border->context, border->path);
+          CGContextDrawPath(border->context, kCGPathFillStroke);
+          CGContextFlush(border->context);
+          SLSOrderWindow(g_connection, border->id, -1, window->id);
+          SLSReenableUpdate(g_connection);
+        }
     }
 
     return EVENT_SUCCESS;
@@ -810,7 +816,7 @@ static EVENT_CALLBACK(EVENT_HANDLER_SLS_WINDOW_ORDER_CHANGED)
         int window_level = 0;
         SLSGetWindowLevel(g_connection, window_id, &window_level);
         SLSSetWindowLevel(g_connection, border->id, window_level);
-        SLSOrderWindow(g_connection, border->id, 1, window_id);
+        SLSOrderWindow(g_connection, border->id, -1, window_id);
     }
 
     return EVENT_SUCCESS;
@@ -834,7 +840,7 @@ static EVENT_CALLBACK(EVENT_HANDLER_SLS_WINDOW_IS_VISIBLE)
     struct border *border = &window->border;
     if (border->id && border_should_order_in(window)) {
         border_ensure_same_space(window);
-        SLSOrderWindow(g_connection, border->id, 1, window_id);
+        SLSOrderWindow(g_connection, border->id, -1, window_id);
     }
 
     return EVENT_SUCCESS;
@@ -1347,7 +1353,7 @@ static EVENT_CALLBACK(EVENT_HANDLER_MISSION_CONTROL_EXIT)
 
     for (int i = 0; i < buf_len(g_window_manager.insert_feedback_windows); ++i) {
         uint32_t feedback_wid = g_window_manager.insert_feedback_windows[i];
-        SLSOrderWindow(g_connection, feedback_wid, 1, 0);
+        SLSOrderWindow(g_connection, feedback_wid, -1, 0);
     }
 
     if (g_mission_control_active == 1 || g_mission_control_active == 2) {

@@ -38,7 +38,7 @@ void border_show_all(void)
             if (bucket->value) {
                 struct window *window = bucket->value;
                 if (window->border.id && border_should_order_in(window)) {
-                    SLSOrderWindow(g_connection, window->border.id, 1, window->id);
+                    SLSOrderWindow(g_connection, window->border.id, -1, window->id);
                 }
             }
 
@@ -69,7 +69,7 @@ void border_redraw(struct window *window)
     SLSDisableUpdate(g_connection);
     CGContextClearRect(window->border.context, window->border.frame);
     CGContextAddPath(window->border.context, window->border.path);
-    CGContextStrokePath(window->border.context);
+    CGContextDrawPath(window->border.context, kCGPathFillStroke);
     CGContextFlush(window->border.context);
     SLSReenableUpdate(g_connection);
 }
@@ -83,6 +83,7 @@ void border_activate(struct window *window)
                                g_window_manager.active_border_color.g,
                                g_window_manager.active_border_color.b,
                                g_window_manager.active_border_color.a);
+    CGContextSetRGBFillColor(window->border.context, 1, 1, 1, 0x15 / 255.);
     border_redraw(window);
 }
 
@@ -95,6 +96,7 @@ void border_deactivate(struct window *window)
                                g_window_manager.normal_border_color.g,
                                g_window_manager.normal_border_color.b,
                                g_window_manager.normal_border_color.a);
+    CGContextSetRGBFillColor(window->border.context, 1, 1, 1, 0x15 / 255.);
     border_redraw(window);
 }
 
@@ -125,9 +127,10 @@ void border_show(struct window *window)
 {
     if (!window->border.id) return;
 
-    SLSOrderWindow(g_connection, window->border.id, 1, window->id);
+    SLSOrderWindow(g_connection, window->border.id, -1, window->id);
 }
 
+extern CGError SLSSetWindowBackgroundBlurRadius(int cid, uint32_t wid, uint32_t radius);
 void border_create(struct window *window)
 {
     if (window->border.id) return;
@@ -138,8 +141,11 @@ void border_create(struct window *window)
         return;
     }
 
-    CGSNewRegionWithRect(&window->frame, &window->border.region);
-    window->border.frame.size = window->frame.size;
+    CGRect border_frame = CGRectInset(window->frame, -4, -4);
+    CGSNewRegionWithRect(&border_frame, &window->border.region);
+    window->border.frame.size = (CGSize){border_frame.size.width + 2, border_frame.size.height + 2};
+    CGRect window_border = window->frame;
+    window_border.origin = (CGPoint){4,4};
 
     uint64_t tag = 1ULL << 46;
     SLSNewWindow(g_connection, 2, 0, 0, window->border.region, &window->border.id);
@@ -147,6 +153,7 @@ void border_create(struct window *window)
     sls_window_disable_shadow(window->border.id);
     SLSSetWindowResolution(g_connection, window->border.id, 1.0f);
     SLSSetWindowOpacity(g_connection, window->border.id, 0);
+    SLSSetWindowBackgroundBlurRadius(g_connection, window->border.id, 20);
     SLSSetWindowLevel(g_connection, window->border.id, window_level(window));
 
     window->border.id_ref = cfarray_of_cfnumbers(&window->border.id, sizeof(uint32_t), 1, kCFNumberSInt32Type);
@@ -158,14 +165,17 @@ void border_create(struct window *window)
                                g_window_manager.normal_border_color.b,
                                g_window_manager.normal_border_color.a);
 
-    window->border.path = CGPathCreateMutable();
-    CGPathAddRoundedRect(window->border.path, NULL, window->border.frame, 0, 0);
+    if (window_border.size.height > 18 && window_border.size.width > 18) {
+      CGContextSetRGBFillColor(window->border.context, 1, 1, 1, 0x15 / 255.);
+      window->border.path = CGPathCreateMutable();
+      CGPathAddRoundedRect(window->border.path, NULL, window_border, 9, 9);
 
-    border_redraw(window);
+      border_redraw(window);
 
-    if (border_should_order_in(window)) {
-        border_ensure_same_space(window);
-        SLSOrderWindow(g_connection, window->border.id, 1, window->id);
+      if (border_should_order_in(window)) {
+          border_ensure_same_space(window);
+          SLSOrderWindow(g_connection, window->border.id, -1, window->id);
+      }
     }
 
     border_update_window_notifications(window->id);

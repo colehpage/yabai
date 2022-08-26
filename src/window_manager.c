@@ -218,6 +218,7 @@ void window_manager_set_window_border_width(struct window_manager *wm, int width
 
 void window_manager_set_active_window_border_color(struct window_manager *wm, uint32_t color)
 {
+    if (wm->active_border_color.p == color) return;
     wm->active_border_color = rgba_color_from_hex(color);
     struct window *window = window_manager_focused_window(wm);
     if (window) border_activate(window);
@@ -420,6 +421,12 @@ void window_manager_move_window(struct window *window, float x, float y)
     CFTypeRef position_ref = AXValueCreate(kAXValueTypeCGPoint, (void *) &position);
     if (!position_ref) return;
 
+    window->frame.origin = position;
+    if (window->border.id) {
+      CGPoint border_origin = { position.x - 4, position.y - 4 };
+      SLSMoveWindow(g_connection, window->border.id, &border_origin);
+    }
+
     AXUIElementSetAttributeValue(window->ref, kAXPositionAttribute, position_ref);
     CFRelease(position_ref);
 }
@@ -429,6 +436,35 @@ void window_manager_resize_window(struct window *window, float width, float heig
     CGSize size = CGSizeMake(width, height);
     CFTypeRef size_ref = AXValueCreate(kAXValueTypeCGSize, (void *) &size);
     if (!size_ref) return;
+
+    window->frame.size = size;
+    if (window->border.id) {
+      struct border* border = &window->border;
+      CGRect new_frame = window->frame;
+      new_frame.size = size;
+      CGRect border_frame = CGRectInset(new_frame, -4, -4);
+      if (border->region) CFRelease(border->region);
+      CGSNewRegionWithRect(&border_frame, &border->region);
+      window->border.frame.size = (CGSize){border_frame.size.width + 2, border_frame.size.height + 2};
+      CGRect window_border = new_frame;
+      window_border.origin = (CGPoint){4,4};
+
+      if (border->path)   CGPathRelease(border->path);
+      if (window_border.size.height > 18 && window_border.size.width > 18) {
+        border->path = CGPathCreateMutable();
+        CGPathAddRoundedRect(border->path, NULL, window_border, 9, 9);
+
+        SLSDisableUpdate(g_connection);
+        SLSOrderWindow(g_connection, border->id, 0, 0);
+        SLSSetWindowShape(g_connection, border->id, 0.0f, 0.0f, border->region);
+        CGContextClearRect(border->context, border->frame);
+        CGContextAddPath(border->context, border->path);
+        CGContextDrawPath(border->context, kCGPathFillStroke);
+        CGContextFlush(border->context);
+        SLSOrderWindow(g_connection, border->id, -1, window->id);
+        SLSReenableUpdate(g_connection);
+      }
+    }
 
     AXUIElementSetAttributeValue(window->ref, kAXSizeAttribute, size_ref);
     CFRelease(size_ref);

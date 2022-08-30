@@ -117,6 +117,7 @@ static EVENT_CALLBACK(EVENT_HANDLER_APPLICATION_LAUNCHED)
         if (view) goto next;
 
         if (window_manager_should_manage_window(window)) {
+            scripting_addition_set_opacity(window->id, 0.f, 0.f);
             if (default_origin) sid = window_space(window);
 
             struct view *view = space_manager_find_view(&g_space_manager, sid);
@@ -138,6 +139,11 @@ static EVENT_CALLBACK(EVENT_HANDLER_APPLICATION_LAUNCHED)
             view->is_dirty = true;
             view_list[view_count++] = view;
 
+            if ((g_window_manager.enable_window_border) &&
+               (!window_rule_check_flag(window, WINDOW_RULE_BORDER))) {
+                border_create(window);
+            }
+            scripting_addition_set_opacity(window->id, g_window_manager.normal_window_opacity, 0.f);
             prev_window_id = window->id;
         }
 
@@ -469,6 +475,7 @@ static EVENT_CALLBACK(EVENT_HANDLER_WINDOW_CREATED)
 
     if (window_manager_should_manage_window(window) && !window_manager_find_managed_window(&g_window_manager, window)) {
         uint64_t sid;
+        scripting_addition_set_opacity(window_id, 0.f, 0.f);
 
         if (g_window_manager.window_origin_mode == WINDOW_ORIGIN_DEFAULT) {
             sid = window_space(window);
@@ -480,6 +487,11 @@ static EVENT_CALLBACK(EVENT_HANDLER_WINDOW_CREATED)
 
         struct view *view = space_manager_tile_window_on_space(&g_space_manager, window, sid);
         window_manager_add_managed_window(&g_window_manager, window, view);
+        scripting_addition_set_opacity(window_id, g_window_manager.normal_window_opacity, 0.f);
+        if ((g_window_manager.enable_window_border) &&
+            (!window_rule_check_flag(window, WINDOW_RULE_BORDER))) {
+            border_create(window);
+        }
     }
 
     event_signal_push(SIGNAL_WINDOW_CREATED, window);

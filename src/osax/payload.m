@@ -869,7 +869,7 @@ static void handle_message(struct mach_buffer* buffer)
         do_window_move(message);
     } break;
     case 0x06: {
-        do_window_opacity_fade(message);
+        do_window_opacity(message);
     } break;
     case 0x07: {
         do_window_layer(message);

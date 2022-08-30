@@ -1072,11 +1072,6 @@ struct window *window_manager_create_and_add_window(struct space_manager *sm, st
     window_manager_add_window(wm, window);
     window_manager_apply_rules_to_window(sm, wm, window);
 
-    if ((g_window_manager.enable_window_border) &&
-        (!window_rule_check_flag(window, WINDOW_RULE_BORDER))) {
-        border_create(window);
-    }
-
     if ((!application->is_hidden) &&
         (!window_check_flag(window, WINDOW_MINIMIZE)) &&
         (!window_check_flag(window, WINDOW_FULLSCREEN)) &&

@@ -480,6 +480,10 @@ void window_manager_set_window_frame(struct window *window, float x, float y, fl
     // in our event-handlers for both the window move and resize-notifications.
     //
 
+    x = (int)(x + 1);
+    y = (int)(y + 1);
+    width = (int)(width + 1);
+    height = (int)(height + 1);
     bool should_move   = !(window->frame.origin.x   == x     && window->frame.origin.y    == y);
     bool should_resize = !(window->frame.size.width == width && window->frame.size.height == height);
     if (!should_move && !should_resize) return;
